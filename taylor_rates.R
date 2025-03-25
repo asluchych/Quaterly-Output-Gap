@@ -389,3 +389,5 @@ ggsave("PDFs/interest_rate_gap.pdf", plot = interest_rate_gap, width = 16, heigh
 ggsave("PDFs/compare_output_gap_plot.pdf", plot = compare_output_gap_plot, width = 16, height = 9, units = "in")
 ggsave("PDFs/interest_rate_comparision_shadow.pdf", plot = interest_rate_comparision_shadow, width = 16, height = 9, units = "in")
 ggsave("PDFs/interest_rates_taylor.pdf", plot = interest_rates_taylor, width = 16, height = 9, units = "in")
+
+save(interest_daily_data, file = "Taylor_rule_data.RData")
