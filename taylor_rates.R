@@ -36,21 +36,21 @@ ameco_data <- as.data.frame(lapply(ameco_data, as.numeric))
 ameco_data <- ameco_data %>% mutate(output_gap = (output_gap / 100))
 
 # Create Time-Series Objects
-real_gdp_quarterly_destatis_ts <- ts(destatis_data$real_gdp[1:133], start = c(1991, 1), frequency = 4)
+real_gdp_quarterly_destatis_ts <- ts(destatis_data$real_gdp[1:136], start = c(1991, 1), frequency = 4)
 potential_gdp_ameco_yearly_ts <- ts(ameco_data$potential_gdp, start = c(1991, 1), frequency = 1)
-output_gap_yearly_ameco_ts <- ts(ameco_data$output_gap[1:33], start = c(1991, 1), frequency = 1)
-real_gdp_yearly_ameco_ts <- ts(ameco_data$real_gdp[1:33], start = c(1991, 1), frequency = 1)
+output_gap_yearly_ameco_ts <- ts(ameco_data$output_gap[1:34], start = c(1991, 1), frequency = 1)
+real_gdp_yearly_ameco_ts <- ts(ameco_data$real_gdp[1:34], start = c(1991, 1), frequency = 1)
 
 #### Interpolation and Dataframe ####
 potential_gdp_interpolated <- td(potential_gdp_ameco_yearly_ts ~ 1, to = "quarterly", method = "denton-cholette", conversion = "sum")
 # Create Time-Series Object for Interpolated Series
 potential_gdp_quarterly_interpolated_ts <- ts(predict(potential_gdp_interpolated), start = c(1991, 1), frequency = 4)
 
-# Create a dataframe with the interpolated data, calculate Output gap, cut them down to 2024Q1
+# Create a dataframe with the interpolated data, calculate Output gap, cut them down to 2024Q4
 quarterly_data <- tibble(
-  date = seq(as.Date("1991-01-01"), as.Date("2024-01-01"), by = "quarter"),
-  potential_gdp = as.vector(potential_gdp_quarterly_interpolated_ts)[1:133],
-  real_gdp = as.vector(real_gdp_quarterly_destatis_ts)[1:133],
+  date = seq(as.Date("1991-01-01"), as.Date("2024-10-01"), by = "quarter"),
+  potential_gdp = as.vector(potential_gdp_quarterly_interpolated_ts)[1:136],
+  real_gdp = as.vector(real_gdp_quarterly_destatis_ts)[1:136],
   output_gap = (real_gdp_quarterly_destatis_ts - (potential_gdp_quarterly_interpolated_ts))/(potential_gdp_quarterly_interpolated_ts)
 )
 
@@ -153,13 +153,13 @@ output_gap_plot_ameco_recent <- ameco_data %>%
 # Aggregate quarterly real output to yearly data; cut it down to 2023
 real_gdp_yearly_destatis_ts <- ts(aggregate(
   real_gdp_quarterly_destatis_ts, FUN = sum
-)[1:33], start = c(1991, 1), frequency = 1
+)[1:34], start = c(1991, 1), frequency = 1
 )
 
 # Aggregate quarterly potential output to yearly data; cut it down to 2023 
 potential_gdp_yearly_interpolated_ts <- ts(aggregate(
   potential_gdp_quarterly_interpolated_ts, FUN = sum
-)[1:33], start = c(1991, 1), frequency = 1
+)[1:34], start = c(1991, 1), frequency = 1
 )
 # This time series is identical to ameco_data$potential_gdp (as it should be)
 
@@ -198,36 +198,6 @@ sum((real_gdp_yearly_ameco_ts - real_gdp_yearly_destatis_ts)^(2))
 # Relative to whole variation (R^(2) Measure, for intercept = 0 and coefficient = 1)
 Rsqr = 1 - sum((real_gdp_yearly_ameco_ts - real_gdp_yearly_destatis_ts)^(2)) / sum((real_gdp_yearly_ameco_ts - mean(real_gdp_yearly_ameco_ts))^(2))
 
-#### Comparing the output gap from the ECB with the interpolated output gap ####
-
-# Import the ECB_Data.xlsx file; it holds the output gap for the EU as a whole
-ecb_data <- read_excel("ECB_Data.xlsx")
-
-# Convert it to date format
-ecb_data <- ecb_data %>% mutate(date = as.Date(date, format = "%d/%m/%Y"), ecb_output_gap = ecb_output_gap/100)
-
-# The source encodes the date for a quarter as the last day, we want the first day of the quarter
-ecb_data <- ecb_data %>% mutate(quarters = seq(as.Date("2013-04-01"), as.Date("2023-07-01"), by = "quarter"))
-
-# Combine the two data frames by the date
-combined_ouput_gap <- left_join(quarterly_data, ecb_data, by = c("date" = "quarters"))
-
-# Only take data from 2010 onwards
-combined_ouput_gap <- combined_ouput_gap %>%
-  filter(date >= as.Date("2010-01-01"))
-
-output_ecb_plot_recent <- combined_ouput_gap %>%
-  ggplot(aes(x = date)) +
-  geom_line(aes(y = output_gap, color = "Output Gap (Germany, Own Estimate)")) +
-  geom_line(aes(y = ecb_output_gap, color = "Output Gap (EU, ECB)")) +
-  theme_minimal() +
-  scale_color_manual(values = c("Output Gap (Germany, Estimate)" = orange, "Output Gap (EU, ECB)" = "blue")) +
-  labs(title = "Output Gap, estimated German and estimated EU, quarterly Frequency",
-    x = "Date",
-    y = "Output Gap") +
-  theme(legend.position = "bottom",
-        text = element_text(size = 18)) +
-  labs(color = NULL)
 
 #### Taylor Rule Implied Interest Rate ####
 
@@ -238,18 +208,22 @@ quarterly_data$output_gap_lag = lag(as.vector(quarterly_data$output_gap), 1)
 
 # Convert quarterly data to daily data
 daily_data <- quarterly_data %>%
-  complete(date = seq(min(date), as.Date("2024-03-31"), by = "day")) %>%
+  complete(date = seq(min(date), as.Date("2024-12-31"), by = "day")) %>%
   fill(everything(), .direction = "down") %>%
   mutate(date = as.Date(date))
 
 # Read in the .RData file
 load("CPI_measures_daily.RData")
 
+
 daily_data <- left_join(daily_data, CPI_measures_d, by = c("date" = "Day"))
 interest_daily_data <- daily_data %>%
   select(date, output_gap, output_gap_lag, pi_yoy, pi_yoy_lag1) %>%
   filter(!is.na(output_gap) & !is.na(output_gap_lag) & !is.na(pi_yoy) & !is.na(pi_yoy_lag1)) %>%
   rename(pi_yoy_lag = pi_yoy_lag1)
+
+interest_daily_data$pi_yoy <- as.numeric(interest_daily_data$pi_yoy)
+interest_daily_data$pi_yoy_lag <- as.numeric(interest_daily_data$pi_yoy_lag)
 
 # Fit the Value of ouput_gap into percent format
 interest_daily_data <- interest_daily_data %>%
